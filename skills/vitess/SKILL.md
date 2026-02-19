@@ -1,62 +1,106 @@
 ---
 name: vitess
-description: Vitess best practices, query optimization, and connection troubleshooting for PlanetScale Vitess databases. Load when working with Vitess databases, sharding, VSchema configuration, keyspace management, or MySQL scaling issues.
+description: |
+  Configure and optimize Vitess deployments for horizontal MySQL scaling.
+  Use when working with Vitess databases, sharding, VSchema configuration,
+  keyspace management, or MySQL scaling issues. Trigger with phrases like
+  "Vitess", "VSchema", "VTGate", "keyspace", "shard", "vindex",
+  "PlanetScale sharding", "cross-shard query", "Vitess migration".
+allowed-tools: Read, Bash
+version: 1.0.0
+author: PlanetScale <skills@planetscale.com>
 license: MIT
-metadata:
-  author: planetscale
-  version: "1.0.0"
-  organization: PlanetScale
-  date: February 2026
 ---
 
 # Vitess
 
-Vitess is a MySQL-compatible, cloud-native database system originally built at YouTube to scale MySQL. PlanetScale runs Vitess as a managed service. Core capabilities:
+Plan, configure, and optimize Vitess deployments for horizontal MySQL scaling.
 
-- **Horizontal sharding**: Built-in sharding transparent to the application — no sharding logic in app code.
-- **Connection pooling**: VTGate multiplexes client connections, scaling concurrent connections far beyond native MySQL limits.
-- **High availability**: Automatic primary failure detection and repair. Resharding and data migrations with near-zero downtime.
-- **Query rewriting and caching**: VTGate rewrites and optimizes queries before routing to shards.
-- **Schema management**: Apply schema changes across all shards consistently, in the background, without disrupting workloads.
-- **Materialized views and messaging**: Cross-shard materialized views and publish/subscribe messaging via VStream.
+## Contents
 
-## Key concepts
+- [Overview](#overview) | [Prerequisites](#prerequisites) | [Instructions](#instructions)
+- [Output](#output) | [Error Handling](#error-handling) | [Examples](#examples) | [Resources](#resources)
 
-| Concept | What it is |
-| --- | --- |
-| **Keyspace** | Logical database mapping to one or more shards. Analogous to a MySQL schema. |
-| **Shard** | A horizontal partition of a keyspace, each backed by a separate MySQL instance. |
-| **VSchema** | Configuration defining how tables map to shards, vindex (sharding) keys, and routing rules. |
-| **Vindex** | Sharding function mapping column values to shards (`hash`, `unicode_loose_xxhash`, `lookup`). |
-| **VTGate** | Stateless proxy that plans and routes queries to the correct shard(s). |
-| **Online DDL** | Non-blocking schema migrations. On PlanetScale, use deploy requests for production changes. |
+## Overview
 
-## PlanetScale specifics
+Vitess is a MySQL-compatible, cloud-native database system built at YouTube. PlanetScale runs Vitess as a managed service. Core capabilities: horizontal sharding transparent to applications, VTGate connection pooling, automatic HA with failure detection, query rewriting and caching, cross-shard schema management, and materialized views via VStream.
 
-- **Branching**: Git-like database branches for development; deploy requests for production schema changes.
-- **Connections**: MySQL protocol, port `3306` (direct) or `443` (serverless). SSL always required.
+Key concepts: **Keyspace** (logical database), **Shard** (horizontal partition), **VSchema** (table-to-shard mapping), **Vindex** (sharding function), **VTGate** (query router), **Online DDL** (non-blocking migrations).
 
-## SQL compatibility
+PlanetScale specifics: Git-like branching, deploy requests for schema changes, MySQL protocol on port 3306/443, SSL required.
 
-Vitess supports nearly all MySQL syntax — most applications work without query changes. Standard DML, DDL, joins, subqueries, CTEs (including recursive CTEs as of v21+), window functions, and common built-in functions all work as expected.
+## Prerequisites
 
-Known limitations:
+- Vitess cluster or PlanetScale database access
+- MySQL-compatible client or `pscale` CLI
+- Understanding of keyspace topology and sharding strategy
 
-- **Stored procedures / triggers / events**: Not supported through VTGate.
-- **`LOCK TABLES` / `GET_LOCK`**: Not supported through VTGate.
-- **`SELECT ... FOR UPDATE`**: Works within a single shard; cross-shard locking is not atomic.
-- **Cross-shard joins**: Supported but expensive (scatter-gather). Filter by vindex column for single-shard routing.
-- **Correlated subqueries**: May fail or perform poorly cross-shard. Rewrite as joins when possible.
-- **AUTO_INCREMENT**: Sequences are per-shard. Use vindexes or app-generated IDs (UUIDs, snowflake) to avoid collisions on sharded tables.
-- **Aggregations on sharded tables**: `GROUP BY`/`ORDER BY`/`LIMIT` merge in VTGate memory. Large result sets can be slow.
-- **Foreign keys**: Limited support. Prefer application-level referential integrity on sharded keyspaces.
+## Instructions
 
-## References
+### Step 1: Understand Architecture
 
-| Topic | Reference | Use for |
-| --- | --- | --- |
-| VSchema | [references/vschema.md](https://raw.githubusercontent.com/planetscale/database-skills/main/skills/vitess/references/vschema.md) | VSchema design, vindexes, sequences, sharding strategies |
-| Schema Changes | [references/schema-changes.md](https://raw.githubusercontent.com/planetscale/database-skills/main/skills/vitess/references/schema-changes.md) | Online DDL, managed migrations, ddl strategies, migration lifecycle |
-| VReplication | [references/vreplication.md](https://raw.githubusercontent.com/planetscale/database-skills/main/skills/vitess/references/vreplication.md) | MoveTables, Reshard, Materialize, VDiff, VStream |
-| Architecture | [references/architecture.md](https://raw.githubusercontent.com/planetscale/database-skills/main/skills/vitess/references/architecture.md) | VTGate, VTTablet, Topology Service, VTOrc, component interactions |
-| Query Serving | [references/query-serving.md](https://raw.githubusercontent.com/planetscale/database-skills/main/skills/vitess/references/query-serving.md) | Query routing, MySQL compatibility, cross-shard performance, EXPLAIN |
+1. Read `{baseDir}/references/architecture.md` for VTGate, VTTablet, Topology Service, VTOrc, and request flow.
+
+### Step 2: Configure VSchema
+
+1. Read `{baseDir}/references/vschema.md` for table-to-shard mapping, vindex selection, sequences, and routing rules.
+2. Alternatively, use lookup vindexes for non-primary-key access patterns.
+
+### Step 3: Optimize Query Routing
+
+1. Read `{baseDir}/references/query-serving.md` for single-shard vs scatter-gather routing, compatibility, and `EXPLAIN` usage.
+2. Filter by vindex column to avoid scatter queries. Alternatively, create materialized views for cross-shard access patterns.
+
+### Step 4: Plan Schema Changes
+
+1. Read `{baseDir}/references/schema-changes.md` for Online DDL strategies (`vitess`, `gh-ost`, `pt-osc`), migration lifecycle, and monitoring.
+
+### Step 5: Data Migration
+
+1. Read `{baseDir}/references/vreplication.md` for MoveTables, Reshard, Materialize, VDiff, and VStream.
+2. Run VDiff to verify data integrity after migration.
+
+## SQL Compatibility
+
+Standard DML, DDL, joins, subqueries, CTEs (recursive in v21+), window functions all work. Limitations: no stored procedures/triggers through VTGate, no `LOCK TABLES`/`GET_LOCK`, cross-shard `SELECT FOR UPDATE` not atomic, cross-shard joins are scatter-gather (filter by vindex), foreign keys limited (prefer app-level integrity), `AUTO_INCREMENT` per-shard (use vindexes or app-generated IDs).
+
+## Output
+
+1. Current state analysis (keyspace topology, VSchema, query patterns)
+2. Proposed change with rationale
+3. `EXPLAIN` output showing query routing
+4. Migration plan with rollback steps
+
+## Error Handling
+
+- **Cross-shard scatter:** Add vindex column filters. Read `{baseDir}/references/query-serving.md`. Alternatively, restructure queries to target single shards.
+- **VSchema misconfiguration:** Verify vindex definitions match column types. Read `{baseDir}/references/vschema.md`.
+- **Migration failures:** Troubleshoot via migration status checks. Read `{baseDir}/references/schema-changes.md`.
+- **Data inconsistency:** Run VDiff to diagnose. Read `{baseDir}/references/vreplication.md`.
+- **Unsupported SQL:** Rewrite stored procedures as application logic. Rewrite correlated subqueries as joins.
+
+## Examples
+
+**Example: VSchema sharding**
+
+```sql
+-- Scenario: Shard orders table by customer_id
+-- Step 1: Read {baseDir}/references/vschema.md
+-- Step 2: Define primary vindex (hash on customer_id)
+-- Step 3: Add sequence table for order_id auto-increment
+-- Step 4: Read {baseDir}/references/vreplication.md for Reshard workflow
+-- Step 5: Run VDiff after migration to verify integrity
+```
+
+**Example: query routing analysis**
+
+```sql
+-- Slow query on sharded keyspace (no vindex filter = scatter)
+EXPLAIN SELECT * FROM orders WHERE status = 'pending' ORDER BY created_at LIMIT 100;
+-- Fix: Add customer_id filter for single-shard routing
+-- Alternative: Create materialized view for status-based lookups
+```
+
+## Resources
+
+Reference files in `{baseDir}/references/`: vschema, schema-changes, vreplication, architecture, query-serving (5 files).
